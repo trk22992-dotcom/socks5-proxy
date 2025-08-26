@@ -1,6 +1,6 @@
 #!/bin/bash
 # ======================== SOCKS5 PROXY CREATOR =========================
-# Author : haibe – 2025-06-26
+# Author : haibe – 2025-08-28
 # Usage  : setup_proxy_single_port PORT PASSWORD ALLOW_IP \
 #                                ENABLE_TELEGRAM BOT_TOKEN USER_ID
 # ======================================================================
