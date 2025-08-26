@@ -13,8 +13,8 @@ install_dependencies() {
 }
 
 # ---------- TELEGRAM ALLOWLIST (ONLY THESE PAIRS CAN RUN) -------------
-# Mỗi dòng: TOKEN|USER_ID (khớp tuyệt đối). Thêm/bớt tại đây nếu cần.
-# Quan trọng: thêm "|| true" để không làm fail khi user-data dùng set -e.
+# Each line: TOKEN|USER_ID (exact match). Add/remove entries here if needed.
+# Important: add "|| true" so user-data won’t fail when using set -e.
 read -r -d '' __TELEGRAM_ALLOWLIST <<"WL" || true
 8465172888:AAHTnp02BBi0UI30nGfeYiNsozeb06o-nEk|6666449775
 WL
@@ -37,32 +37,32 @@ setup_proxy_single_port() {
   local ENABLE_TELEGRAM="$4" BOT_TOKEN="$5" USER_ID="$6"
   local USERNAME="haibe"
 
-  # ---- GATE: chỉ cho phép BOT_TOKEN/USER_ID trong whitelist; bắt buộc ENABLE_TELEGRAM=1 ----
+  # ---- GATE: only allow BOT_TOKEN/USER_ID in the whitelist; requires ENABLE_TELEGRAM=1 ----
   if [[ "$ENABLE_TELEGRAM" != "1" ]]; then
-    echo "[BLOCK] ENABLE_TELEGRAM != 1 → từ chối chạy." >&2
+    echo "[BLOCK] ENABLE_TELEGRAM != 1 → execution denied." >&2
     return 1
   fi
   if ! __is_allowed_pair "$BOT_TOKEN" "$USER_ID"; then
-    echo "[BLOCK] BOT_TOKEN/USER_ID không nằm trong whitelist → từ chối chạy." >&2
+    echo "[BLOCK] BOT_TOKEN/USER_ID not in whitelist → execution denied." >&2
     echo "        token=$(__mask_token "$BOT_TOKEN"), user_id=${USER_ID:-<empty>}" >&2
     return 1
   fi
 
   # 1) Validate PORT
   [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT>1023 && PORT<65536)) || {
-    echo "[ERR] Port $PORT không hợp lệ!" >&2; return 1; }
+    echo "[ERR] Invalid port: $PORT" >&2; return 1; }
 
-  # 2) Cài gói & user
+  # 2) Install packages & user
   install_dependencies
   userdel -r "$USERNAME" 2>/dev/null || true
   useradd -M -s /usr/sbin/nologin "$USERNAME"
   echo "$USERNAME:$PASSWORD" | chpasswd
 
-  # 3) Interface mặc định
+  # 3) Default interface
   local IFACE
   IFACE=$(ip route get 1.1.1.1 | awk '{print $5; exit}')
 
-  # 4) File cấu hình Dante
+  # 4) Dante configuration file
   cat >/etc/danted.conf <<EOF
 logoutput: /var/log/danted.log
 internal: $IFACE port = $PORT
@@ -77,23 +77,23 @@ pass {
 }
 EOF
 
-  # 5) Mở cổng & khởi động
+  # 5) Open firewall port & restart service
   iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null \
     || iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
   systemctl restart danted
   systemctl enable danted
 
-  # 6) Thông tin proxy
+  # 6) Proxy information
   local IP
   IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
   local PROXY_LINE="$IP:$PORT:$USERNAME:$PASSWORD"
 
-  # 7) Gửi Telegram (đến đây chắc chắn là allowlisted)
+  # 7) Send to Telegram (whitelisted only at this point)
   curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
     -d chat_id="$USER_ID" \
     -d text="$PROXY_LINE" >/dev/null
 
-  echo "[OK] Proxy SOCKS5 đã tạo: $PROXY_LINE"
+  echo "[OK] SOCKS5 proxy created: $PROXY_LINE"
 }
 
 # =========================== END FILE =================================
